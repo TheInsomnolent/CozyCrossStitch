@@ -4,6 +4,7 @@ import { Create } from './routes/Create';
 import { Pattern } from './routes/Pattern';
 import { Shopping } from './routes/Shopping';
 import { Print } from './routes/Print';
+import { InstallPrompt } from './components/InstallPrompt';
 
 function Header() {
   return (
@@ -52,6 +53,7 @@ export function App() {
         <Route path="/pattern/:id/shopping" element={<Shell><Shopping /></Shell>} />
         <Route path="/pattern/:id/print" element={<Shell><Print /></Shell>} />
       </Routes>
+      <InstallPrompt />
     </HashRouter>
   );
 }
