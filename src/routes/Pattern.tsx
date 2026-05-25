@@ -30,6 +30,7 @@ export function Pattern() {
   const [view, setView] = useState<ViewMode>('both');
   const [highlight, setHighlight] = useState<number | null>(null); // palette index
   const [paintMode, setPaintMode] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<Viewport>({ cell: 18, tx: 0, ty: 0 });
@@ -568,8 +569,14 @@ export function Pattern() {
           <canvas ref={canvasRef} className="pattern-canvas" />
         </div>
 
-        <aside className="legend">
-          <div className="legend-handle" />
+        <aside className={'legend' + (legendOpen ? '' : ' collapsed')}>
+          <button
+            type="button"
+            className="legend-handle"
+            aria-label={legendOpen ? 'Collapse key' : 'Expand key'}
+            aria-expanded={legendOpen}
+            onClick={() => setLegendOpen((o) => !o)}
+          />
           <div className="row gap-2" style={{ justifyContent: 'space-between', marginBottom: '0.5rem' }}>
             <strong style={{ fontFamily: 'var(--font-serif)' }}>Key</strong>
             <button
