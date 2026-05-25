@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Copy, Printer } from 'lucide-react';
-import { loadPattern, type Pattern } from '../lib/storage';
+import { getBit, loadPattern, type Pattern } from '../lib/storage';
 import { estimateSkeins, estimateThreadInches } from '../lib/skeins';
 
 interface Row {
@@ -10,8 +10,11 @@ interface Row {
   hex: string;
   full: number;
   half: number;
+  completedFull: number;
+  completedHalf: number;
   skeins: number;
   inches: number;
+  done: boolean;
 }
 
 export function Shopping() {
@@ -38,13 +41,22 @@ export function Shopping() {
           hex: e.threadHex,
           full: 0,
           half: 0,
+          completedFull: 0,
+          completedHalf: 0,
           skeins: 0,
           inches: 0,
+          done: false,
         };
         map.set(key, row);
       }
-      if (e.kind === 'full') row.full++;
-      else row.half++;
+      const isComplete = getBit(pattern.completion, i);
+      if (e.kind === 'full') {
+        row.full++;
+        if (isComplete) row.completedFull++;
+      } else {
+        row.half++;
+        if (isComplete) row.completedHalf++;
+      }
     }
     for (const row of map.values()) {
       row.inches = estimateThreadInches({
@@ -59,8 +71,15 @@ export function Shopping() {
         fullStitches: row.full,
         halfStitches: row.half,
       });
+      row.done =
+        row.full + row.half > 0 &&
+        row.completedFull >= row.full &&
+        row.completedHalf >= row.half;
     }
-    return [...map.values()].sort((a, b) => b.full + b.half - (a.full + a.half));
+    return [...map.values()].sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return b.full + b.half - (a.full + a.half);
+    });
   }, [pattern]);
 
   const totalSkeins = rows.reduce((s, r) => s + r.skeins, 0);
@@ -123,7 +142,7 @@ export function Shopping() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.floss}>
+              <tr key={r.floss} className={r.done ? 'thread-row-done' : undefined}>
                 <td>
                   <span className="swatch" style={{ background: r.hex }} />
                 </td>

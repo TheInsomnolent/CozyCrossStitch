@@ -35,6 +35,10 @@ export function Pattern() {
   const viewportRef = useRef<Viewport>({ cell: 18, tx: 0, ty: 0 });
   const completionRef = useRef<number[] | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  // Bumped whenever completion bits change, to drive React re-renders for the
+  // legend / progress.
+  const [completionVersion, setCompletionVersion] = useState(0);
+  const bumpVersion = useCallback(() => setCompletionVersion((v) => v + 1), []);
 
   useEffect(() => {
     if (!id) return;
@@ -213,15 +217,26 @@ export function Pattern() {
     }
     ctx.stroke();
 
-    // ruler labels every 10
-    ctx.fillStyle = 'rgba(60, 40, 40, 0.7)';
-    ctx.font = `600 11px ui-monospace, monospace`;
+    // ruler labels every 10 — font scales with cell so they stay legible
+    // when zoomed in/out
+    const labelSize = Math.max(10, Math.min(28, Math.round(cell * 0.55)));
+    const arrowSize = 8;
+    // padding to nudge a label out of the way of the centre arrow it would
+    // otherwise sit under
+    const arrowClearance = arrowSize + 4;
+    const midPxX = tx + (p.gridW / 2) * cell;
+    const midPxY = ty + (p.gridH / 2) * cell;
+
+    ctx.fillStyle = 'rgba(60, 40, 40, 0.78)';
+    ctx.font = `600 ${labelSize}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     for (let x = 10; x < p.gridW; x += 10) {
       const px = tx + x * cell;
       if (px > 12 && px < rect.width - 12) {
-        ctx.fillText(String(x), px, ty - 2);
+        const collides = Math.abs(px - midPxX) < arrowSize + 2;
+        const labelY = ty - 2 - (collides ? arrowClearance : 0);
+        ctx.fillText(String(x), px, labelY);
       }
     }
     ctx.textAlign = 'right';
@@ -229,7 +244,9 @@ export function Pattern() {
     for (let y = 10; y < p.gridH; y += 10) {
       const py = ty + y * cell;
       if (py > 8 && py < rect.height - 8) {
-        ctx.fillText(String(y), tx - 4, py);
+        const collides = Math.abs(py - midPxY) < arrowSize + 2;
+        const labelX = tx - 4 - (collides ? arrowClearance : 0);
+        ctx.fillText(String(y), labelX, py);
       }
     }
 
@@ -247,11 +264,16 @@ export function Pattern() {
     requestDraw();
   }, [view, highlight, requestDraw]);
 
-  // ------- input: zoom + pan + tap -------
-  // Single-pointer drag pans; two-pointer pinch zooms; wheel zooms about cursor.
+  // ------- input: zoom + pan + tap + paint -------
+  // Single-pointer drag pans (or paints in paint mode); two-pointer pinch zooms;
+  // wheel zooms about cursor.
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchRef = useRef<{ dist: number; cx: number; cy: number; cell: number; tx: number; ty: number } | null>(null);
   const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  // Active when paintMode + a single pointer is held down.
+  const paintingRef = useRef(false);
+  // Last cell painted during this drag, so we don't toggle one cell repeatedly.
+  const lastPaintedRef = useRef<number>(-1);
 
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -261,7 +283,15 @@ export function Pattern() {
     const y = e.clientY - rect.top;
     pointersRef.current.set(e.pointerId, { x, y });
     if (pointersRef.current.size === 1) {
-      dragRef.current = { x, y, moved: false };
+      if (paintMode) {
+        // Start a paint stroke: mark the first cell immediately, no pan/tap.
+        paintingRef.current = true;
+        lastPaintedRef.current = -1;
+        paintAt(x, y);
+        dragRef.current = null;
+      } else {
+        dragRef.current = { x, y, moved: false };
+      }
     } else if (pointersRef.current.size === 2) {
       const pts = Array.from(pointersRef.current.values());
       const dx = pts[0].x - pts[1].x;
@@ -308,6 +338,11 @@ export function Pattern() {
       return;
     }
 
+    if (pointersRef.current.size === 1 && paintingRef.current) {
+      paintAt(x, y);
+      return;
+    }
+
     if (pointersRef.current.size === 1 && dragRef.current) {
       const dx = x - prev.x;
       const dy = y - prev.y;
@@ -326,10 +361,14 @@ export function Pattern() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const wasDrag = dragRef.current?.moved ?? false;
+    const wasPainting = paintingRef.current;
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size < 2) pinchRef.current = null;
     if (pointersRef.current.size === 0) {
-      if (!wasDrag) {
+      if (wasPainting) {
+        paintingRef.current = false;
+        lastPaintedRef.current = -1;
+      } else if (!wasDrag) {
         toggleCellAt(x, y);
       }
       dragRef.current = null;
@@ -375,12 +414,29 @@ export function Pattern() {
     if (gx < 0 || gy < 0 || gx >= p.gridW || gy >= p.gridH) return;
     const i = gy * p.gridW + gx;
     if (p.cells[i] === 0xff) return;
-    if (paintMode) {
-      // paint = mark completed (don't toggle off on tap during paint)
-      setBit(completion, i, true);
-    } else {
-      setBit(completion, i, !getBit(completion, i));
-    }
+    setBit(completion, i, !getBit(completion, i));
+    bumpVersion();
+    requestDraw();
+    scheduleSave();
+  };
+
+  /** Paint (mark complete) the cell under (x,y), if it isn't already and we
+   *  haven't just painted it this stroke. */
+  const paintAt = (x: number, y: number) => {
+    const p = pattern;
+    const completion = completionRef.current;
+    if (!p || !completion) return;
+    const vp = viewportRef.current;
+    const gx = Math.floor((x - vp.tx) / vp.cell);
+    const gy = Math.floor((y - vp.ty) / vp.cell);
+    if (gx < 0 || gy < 0 || gx >= p.gridW || gy >= p.gridH) return;
+    const i = gy * p.gridW + gx;
+    if (i === lastPaintedRef.current) return;
+    lastPaintedRef.current = i;
+    if (p.cells[i] === 0xff) return;
+    if (getBit(completion, i)) return;
+    setBit(completion, i, true);
+    bumpVersion();
     requestDraw();
     scheduleSave();
   };
@@ -408,15 +464,48 @@ export function Pattern() {
     return m;
   }, [pattern]);
 
+  // Per-palette-entry completion counts, recomputed when completion changes.
+  const completedCounts = useMemo(() => {
+    if (!pattern || !completionRef.current) return new Map<number, number>();
+    const m = new Map<number, number>();
+    const c = completionRef.current;
+    for (let i = 0; i < pattern.cells.length; i++) {
+      const v = pattern.cells[i];
+      if (v === 0xff) continue;
+      if (getBit(c, i)) m.set(v, (m.get(v) ?? 0) + 1);
+    }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pattern, completionVersion]);
+
+  // Legend rows sorted so fully-completed entries fall to the bottom.
+  const legendRows = useMemo(() => {
+    if (!pattern) return [];
+    const rows = pattern.palette
+      .map((entry, idx) => {
+        const count = counts.get(idx) ?? 0;
+        const done = completedCounts.get(idx) ?? 0;
+        return { entry, idx, count, done, isDone: count > 0 && done >= count };
+      })
+      .filter((r) => r.count > 0);
+    rows.sort((a, b) => {
+      if (a.isDone !== b.isDone) return a.isDone ? 1 : -1;
+      return a.idx - b.idx;
+    });
+    return rows;
+  }, [pattern, counts, completedCounts]);
+
   const totalNonBlank = useMemo(() => {
     if (!pattern) return 0;
     let n = 0;
     for (let i = 0; i < pattern.cells.length; i++) if (pattern.cells[i] !== 0xff) n++;
     return n;
   }, [pattern]);
-  const completedCount = completionRef.current
-    ? popcount(completionRef.current)
-    : 0;
+  const completedCount = useMemo(
+    () => (completionRef.current ? popcount(completionRef.current) : 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pattern, completionVersion]
+  );
   const pct = totalNonBlank ? Math.round((completedCount / totalNonBlank) * 100) : 0;
 
   if (!pattern) {
@@ -491,13 +580,15 @@ export function Pattern() {
               Clear highlight
             </button>
           </div>
-          {pattern.palette.map((e, idx) => {
-            const count = counts.get(idx) ?? 0;
-            if (count === 0) return null;
+          {legendRows.map(({ entry: e, idx, count, isDone }) => {
             return (
               <div
                 key={idx}
-                className={'legend-row' + (highlight === idx ? ' active' : '')}
+                className={
+                  'legend-row' +
+                  (highlight === idx ? ' active' : '') +
+                  (isDone ? ' done' : '')
+                }
                 onClick={() => setHighlight(highlight === idx ? null : idx)}
                 role="button"
                 tabIndex={0}

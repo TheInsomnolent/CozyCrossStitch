@@ -495,6 +495,16 @@ input[type='range']::-moz-range-thumb {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.thread-table tr.thread-row-done {
+  text-decoration: line-through;
+  text-decoration-color: rgba(168, 109, 122, 0.7);
+  text-decoration-thickness: 2px;
+  color: var(--ink-muted);
+  opacity: 0.65;
+}
+.thread-table tr.thread-row-done .swatch {
+  filter: grayscale(0.6);
+}
 
 /* === Modal === */
 .modal-overlay {
@@ -579,12 +589,25 @@ input[type='range']::-moz-range-thumb {
   border-bottom: 1px solid var(--line);
   cursor: pointer;
   border-radius: var(--r-sm);
+  transition:
+    opacity 350ms var(--ease, ease),
+    filter 350ms var(--ease, ease),
+    background 200ms var(--ease, ease);
 }
 .legend-row:hover {
   background: rgba(255, 255, 255, 0.7);
 }
 .legend-row.active {
   background: rgba(244, 199, 203, 0.25);
+}
+.legend-row.done {
+  opacity: 0.4;
+  filter: grayscale(0.5);
+  text-decoration: line-through;
+  text-decoration-color: rgba(168, 109, 122, 0.6);
+}
+.legend-row.done:hover {
+  opacity: 0.7;
 }
 .legend-symbol {
   font-family: var(--font-mono);
