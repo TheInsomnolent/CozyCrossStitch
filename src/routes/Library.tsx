@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Trash2, ListChecks, Sparkles } from 'lucide-react';
 import { deletePattern, listSummaries, type PatternSummary } from '../lib/storage';
+import starterPatternsRaw from '../data/starterPatterns.json';
+
+const STARTER_IDS = new Set(
+  (starterPatternsRaw as Array<{ id: string }>).map((p) => p.id),
+);
 
 export function Library() {
   const [items, setItems] = useState<PatternSummary[] | null>(null);
@@ -54,8 +59,13 @@ export function Library() {
                 className={'card card-hover library-card' + (p.id === freshId ? ' library-card-fresh' : '')}
               >
                 {p.id === freshId && <span className="fresh-glow" aria-hidden />}
-                <Link to={`/pattern/${p.id}`} aria-label={`Open ${p.name}`}>
+                <Link to={`/pattern/${p.id}`} aria-label={`Open ${p.name}`} className="library-thumb-link">
                   <img src={p.thumbnail} alt="" className="library-thumb" />
+                  {STARTER_IDS.has(p.id) && (
+                    <span className="starter-ribbon" aria-label="Example pattern">
+                      <Sparkles size={12} aria-hidden /> Example to play with
+                    </span>
+                  )}
                 </Link>
                 <div className="library-body">
                   <div className="library-title">{p.name || 'Untitled'}</div>
