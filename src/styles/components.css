@@ -547,6 +547,38 @@ input[type='range']::-moz-range-thumb {
   background: rgba(251, 246, 240, 0.95);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(8px);
+  flex-wrap: wrap;
+}
+.pattern-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pattern-title-name {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hide-sm { display: inline; }
+
+@media (max-width: 720px) {
+  .pattern-toolbar {
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .pattern-title {
+    order: -1;
+    flex: 1 1 100%;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .pattern-title-name { font-size: 1rem; }
+  .pattern-title .muted { font-size: 0.72rem; }
+  .hide-sm { display: none; }
 }
 .pattern-stage {
   flex: 1;
@@ -577,14 +609,13 @@ input[type='range']::-moz-range-thumb {
 .legend-handle {
   display: block;
   width: 56px;
-  height: 18px;
-  padding: 7px 8px;
-  margin: -0.25rem auto 0.5rem;
-  background: transparent;
+  height: 4px;
+  padding: 10px 0;
+  margin: -0.4rem auto 0.4rem;
   border: none;
   cursor: pointer;
+  background: var(--line-strong);
   background-clip: content-box;
-  background-color: var(--line-strong);
   border-radius: 999px;
   box-sizing: content-box;
   transition: background-color 200ms ease, transform 200ms ease;

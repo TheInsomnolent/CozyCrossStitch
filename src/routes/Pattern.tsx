@@ -76,7 +76,17 @@ export function Pattern() {
       requestDraw();
     };
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const stage = stageRef.current;
+    let ro: ResizeObserver | null = null;
+    if (stage && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => requestDraw());
+      ro.observe(stage);
+    }
+    return () => {
+      window.removeEventListener('resize', onResize);
+      ro?.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pattern, fit]);
 
   // ------- drawing -------
@@ -521,10 +531,10 @@ export function Pattern() {
     <div className="pattern-page">
       <div className="pattern-toolbar">
         <Link to="/" className="btn btn-ghost btn-sm" aria-label="Back to library">
-          <ArrowLeft size={16} /> Library
+          <ArrowLeft size={16} /> <span className="hide-sm">Library</span>
         </Link>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.1rem', fontWeight: 600, lineHeight: 1.1 }}>
+        <div className="pattern-title">
+          <div className="pattern-title-name">
             {pattern.name}
           </div>
           <div className="muted" style={{ fontSize: '0.78rem' }}>
