@@ -238,8 +238,9 @@ export function Create() {
     thumb.width = size;
     thumb.height = size;
     const tctx = thumb.getContext('2d')!;
-    tctx.fillStyle = fabricHex(w.fabricPreset, w.fabricCustomHex);
-    tctx.fillRect(0, 0, size, size);
+    // Leave the area outside the preview transparent so library cards blend
+    // seamlessly with their background.
+    tctx.clearRect(0, 0, size, size);
     if (previewCanvasRef.current) {
       const src = previewCanvasRef.current;
       const ratio = Math.min(size / src.width, size / src.height);
