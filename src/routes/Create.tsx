@@ -271,7 +271,8 @@ export function Create() {
     };
     await savePattern(pattern);
     setBusy(false);
-    nav(`/pattern/${id}`);
+    useWizard.getState().reset();
+    nav('/', { state: { freshId: id } });
   }, [w, preview, nav]);
 
   return (

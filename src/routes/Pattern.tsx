@@ -76,12 +76,14 @@ export function Pattern() {
 
   // ------- drawing -------
   const drawScheduledRef = useRef(false);
+  // Hold the latest `draw` in a ref so requestDraw never invokes a stale closure.
+  const drawRef = useRef<() => void>(() => {});
   const requestDraw = useCallback(() => {
     if (drawScheduledRef.current) return;
     drawScheduledRef.current = true;
     requestAnimationFrame(() => {
       drawScheduledRef.current = false;
-      draw();
+      drawRef.current();
     });
   }, []);
 
@@ -235,6 +237,11 @@ export function Pattern() {
     drawCenterArrows(ctx, p.gridW, p.gridH, viewportRef.current, rect);
   }, [pattern, view, highlight]);
 
+  // Keep the ref pointing at the latest draw function.
+  useEffect(() => {
+    drawRef.current = draw;
+  }, [draw]);
+
   // redraw on view changes
   useEffect(() => {
     requestDraw();
@@ -329,7 +336,7 @@ export function Pattern() {
     }
   };
 
-  const onWheel = (e: React.WheelEvent) => {
+  const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     const stage = stageRef.current!;
     const rect = stage.getBoundingClientRect();
@@ -346,6 +353,17 @@ export function Pattern() {
     };
     requestDraw();
   };
+
+  // React attaches onWheel as a passive listener, so preventDefault() warns and
+  // page scroll happens. Bind a native non-passive listener instead.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const handler = (e: WheelEvent) => onWheel(e);
+    stage.addEventListener('wheel', handler, { passive: false });
+    return () => stage.removeEventListener('wheel', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pattern]);
 
   const toggleCellAt = (x: number, y: number) => {
     const p = pattern;
@@ -457,7 +475,6 @@ export function Pattern() {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          onWheel={onWheel}
         >
           <canvas ref={canvasRef} className="pattern-canvas" />
         </div>

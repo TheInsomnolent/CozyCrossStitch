@@ -1,16 +1,29 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Trash2, ListChecks, Sparkles } from 'lucide-react';
 import { deletePattern, listSummaries, type PatternSummary } from '../lib/storage';
 
 export function Library() {
   const [items, setItems] = useState<PatternSummary[] | null>(null);
   const [toDelete, setToDelete] = useState<PatternSummary | null>(null);
+  const location = useLocation();
+  const nav = useNavigate();
+  const freshId = (location.state as { freshId?: string } | null)?.freshId ?? null;
 
   const refresh = () => listSummaries().then(setItems);
   useEffect(() => {
     refresh();
   }, []);
+
+  // Clear the freshId from history state after the glow animation finishes
+  // so a refresh / back-nav doesn't keep highlighting the same card.
+  useEffect(() => {
+    if (!freshId) return;
+    const t = window.setTimeout(() => {
+      nav(location.pathname, { replace: true, state: {} });
+    }, 6000);
+    return () => window.clearTimeout(t);
+  }, [freshId, nav, location.pathname]);
 
   return (
     <section className="stack gap-3">
@@ -49,7 +62,11 @@ export function Library() {
           {items.map((p) => {
             const pct = p.totalNonBlank === 0 ? 0 : Math.round((p.completed / p.totalNonBlank) * 100);
             return (
-              <article key={p.id} className="card card-hover library-card">
+              <article
+                key={p.id}
+                className={'card card-hover library-card' + (p.id === freshId ? ' library-card-fresh' : '')}
+              >
+                {p.id === freshId && <span className="fresh-glow" aria-hidden />}
                 <Link to={`/pattern/${p.id}`} aria-label={`Open ${p.name}`}>
                   <img src={p.thumbnail} alt="" className="library-thumb" />
                 </Link>
