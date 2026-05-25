@@ -4,7 +4,7 @@
   "description": "Turn photos into beautiful cross stitch patterns. Works offline.",
   "start_url": "./",
   "scope": "./",
-  "id": "/CosyCrossStitch/",
+  "id": "/CozyCrossStitch/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#FBF6F0",

@@ -2,12 +2,12 @@
 const VERSION = 'ccs-v1';
 const ASSET_CACHE = `${VERSION}-assets`;
 const APP_SHELL = [
-  '/CosyCrossStitch/',
-  '/CosyCrossStitch/index.html',
-  '/CosyCrossStitch/manifest.webmanifest',
-  '/CosyCrossStitch/favicon.svg',
-  '/CosyCrossStitch/icon.svg',
-  '/CosyCrossStitch/icon-maskable.svg',
+  '/CozyCrossStitch/',
+  '/CozyCrossStitch/index.html',
+  '/CozyCrossStitch/manifest.webmanifest',
+  '/CozyCrossStitch/favicon.svg',
+  '/CozyCrossStitch/icon.svg',
+  '/CozyCrossStitch/icon-maskable.svg',
 ];
 
 self.addEventListener('install', (event) => {
@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
         .catch(async () => {
           const cached = await caches.match(req);
           if (cached) return cached;
-          const shell = await caches.match('/CosyCrossStitch/index.html');
+          const shell = await caches.match('/CozyCrossStitch/index.html');
           return shell || Response.error();
         }),
     );

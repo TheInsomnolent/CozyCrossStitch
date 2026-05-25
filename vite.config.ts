@@ -1,9 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// GitHub Pages: site served from /CosyCrossStitch/
+// GitHub Pages: site served from /CozyCrossStitch/
 export default defineConfig({
-  base: '/CosyCrossStitch/',
+  base: '/CozyCrossStitch/',
   plugins: [react()],
   worker: {
     format: 'es',

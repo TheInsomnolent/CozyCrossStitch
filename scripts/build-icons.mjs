@@ -196,7 +196,7 @@ function buildOgSvg(font) {
     </g>
   </g>
 
-  <text x="80" y="595" font-family="'Nunito', 'Segoe UI', system-ui, sans-serif" font-size="22" font-weight="600" fill="#9b6b76" letter-spacing="2">theinsomnolent.github.io/CosyCrossStitch</text>
+  <text x="80" y="595" font-family="'Nunito', 'Segoe UI', system-ui, sans-serif" font-size="22" font-weight="600" fill="#9b6b76" letter-spacing="2">theinsomnolent.github.io/CozyCrossStitch</text>
 </svg>`;
 }
 
