@@ -12,6 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const PUBLIC = join(ROOT, 'public');
 const FONT_PATH = join(ROOT, 'Parisienne-Regular.ttf');
+const STARTERS_PATH = join(ROOT, 'src', 'data', 'starterPatterns.json');
 
 const SIZE = 512;
 
@@ -50,6 +51,47 @@ function gradientStops() {
   return GRAD_STOPS.map((s) => `<stop offset="${s.offset}" stop-color="${s.color}"/>`).join('');
 }
 
+function hexToRgb(hex) {
+  const h = (hex || '#000000').replace('#', '');
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+/**
+ * Rasterize a stored pattern's cells (using `displayHex` per palette entry and
+ * the fabric colour for blank cells) into a crisply upscaled PNG and return it
+ * as a base64 data URL for inline SVG embedding.
+ */
+async function renderPatternDataUrl(pattern, targetPx = 720) {
+  const W = pattern.gridW;
+  const H = pattern.gridH;
+  const fabric = hexToRgb(pattern.fabric?.hex ?? '#ffffff');
+  const buf = Buffer.alloc(W * H * 4);
+  for (let i = 0; i < W * H; i++) {
+    const v = pattern.cells[i];
+    let r, g, b;
+    if (v === 0xff) {
+      [r, g, b] = fabric;
+    } else {
+      const entry = pattern.palette[v];
+      [r, g, b] = hexToRgb(entry?.displayHex || entry?.threadHex);
+    }
+    const o = i * 4;
+    buf[o] = r;
+    buf[o + 1] = g;
+    buf[o + 2] = b;
+    buf[o + 3] = 255;
+  }
+  const png = await sharp(buf, { raw: { width: W, height: H, channels: 4 } })
+    .resize(targetPx, targetPx, { kernel: 'nearest' })
+    .png()
+    .toBuffer();
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
 function buildIconSvg({ size = SIZE, padding = 0.12, rounded = true, pathD, pathBBox }) {
   const safe = size * (1 - padding * 2);
   const scale = Math.min(safe / pathBBox.width, safe / pathBBox.height);
@@ -71,11 +113,11 @@ function buildIconSvg({ size = SIZE, padding = 0.12, rounded = true, pathD, path
 </svg>`;
 }
 
-function buildOgSvg(font) {
+function buildOgSvg(font, patternDataUrl) {
   const wordmark = textToPath(font, 'Cozy Cross Stitch', 110);
   const monogram = textToPath(font, 'CCS', 78);
 
-  const wmMaxWidth = 580;
+  const wmMaxWidth = 520;
   const wmScale = Math.min(1, wmMaxWidth / wordmark.bbox.width);
   const wmH = wordmark.bbox.height * wmScale;
   const wmX = 230 - wordmark.bbox.x1 * wmScale;
@@ -91,6 +133,12 @@ function buildOgSvg(font) {
   const monoH = monogram.bbox.height * monoScale;
   const monoX = 80 + (120 - monoW) / 2 - monogram.bbox.x1 * monoScale;
   const monoY = 80 + (120 - monoH) / 2 - monogram.bbox.y1 * monoScale;
+
+  // Showcase frame for the Ivy preview on the right side.
+  const FS = 360;
+  const FX = 1200 - 80 - FS; // 760
+  const FY = (630 - FS) / 2; // 135
+  const FR = 22;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
@@ -112,6 +160,9 @@ function buildOgSvg(font) {
     <filter id="soft" x="-10%" y="-10%" width="120%" height="120%">
       <feGaussianBlur in="SourceGraphic" stdDeviation="14"/>
     </filter>
+    <clipPath id="frameClip">
+      <rect x="${FX}" y="${FY}" width="${FS}" height="${FS}" rx="${FR}" ry="${FR}"/>
+    </clipPath>
   </defs>
 
   <rect width="1200" height="630" fill="url(#bg)"/>
@@ -119,6 +170,7 @@ function buildOgSvg(font) {
   <circle cx="1060" cy="540" r="220" fill="#DCCAE6" opacity="0.55" filter="url(#soft)"/>
   <rect width="1200" height="630" fill="url(#aida)"/>
 
+  <!-- Monogram badge -->
   <g>
     <rect x="80" y="80" width="120" height="120" rx="28" fill="url(#badge)"/>
     <g transform="translate(${monoX.toFixed(2)} ${monoY.toFixed(2)}) scale(${monoScale.toFixed(4)})">
@@ -126,74 +178,24 @@ function buildOgSvg(font) {
     </g>
   </g>
 
+  <!-- Wordmark (Parisienne, baked to path) -->
   <g transform="translate(${wmX.toFixed(2)} ${wmY.toFixed(2)}) scale(${wmScale.toFixed(4)})">
     <path d="${wordmark.d}" fill="${INK}"/>
   </g>
   <text x="230" y="248" font-family="'Nunito', 'Segoe UI', system-ui, sans-serif" font-size="22" font-weight="600" fill="#9b6b76" letter-spacing="3">CROSS STITCH PATTERN MAKER</text>
 
-  <text x="80" y="360" font-family="'Cormorant Garamond', Georgia, serif" font-size="76" font-weight="600" fill="#3d2932">Turn photos into</text>
-  <text x="80" y="436" font-family="'Cormorant Garamond', Georgia, serif" font-size="76" font-weight="700" fill="#c58a95" font-style="italic">beautiful cross stitch.</text>
+  <!-- Headline -->
+  <text x="80" y="400" font-family="'Cormorant Garamond', Georgia, serif" font-size="60" font-weight="600" fill="#3d2932">Turn photos into</text>
+  <text x="80" y="470" font-family="'Cormorant Garamond', Georgia, serif" font-size="60" font-weight="700" fill="#c58a95" font-style="italic">beautiful cross stitch.</text>
 
-  <g font-family="'Nunito', 'Segoe UI', system-ui, sans-serif" font-size="24" font-weight="600" fill="#5b3a45">
-    <g transform="translate(80,485)">
-      <rect width="240" height="56" rx="28" fill="rgba(255,255,255,0.75)" stroke="rgba(197,138,149,0.35)"/>
-      <text x="32" y="36">DMC thread key</text>
-    </g>
-    <g transform="translate(340,485)">
-      <rect width="240" height="56" rx="28" fill="rgba(255,255,255,0.75)" stroke="rgba(197,138,149,0.35)"/>
-      <text x="32" y="36">Half-stitch blend</text>
-    </g>
-    <g transform="translate(600,485)">
-      <rect width="220" height="56" rx="28" fill="rgba(255,255,255,0.75)" stroke="rgba(197,138,149,0.35)"/>
-      <text x="32" y="36">Skein estimate</text>
-    </g>
-    <g transform="translate(840,485)">
-      <rect width="280" height="56" rx="28" fill="rgba(255,255,255,0.75)" stroke="rgba(197,138,149,0.35)"/>
-      <text x="32" y="36">Offline · installable</text>
-    </g>
-  </g>
+  <!-- Tagline -->
+  <text x="80" y="535" font-family="'Nunito', 'Segoe UI', system-ui, sans-serif" font-size="24" font-weight="500" fill="#5b3a45">Free · private · offline · printable</text>
 
-  <g transform="translate(820,80)">
-    <rect width="300" height="300" rx="18" fill="rgba(255,255,255,0.6)" stroke="rgba(197,138,149,0.35)"/>
-    <g>
-      <rect x="10"  y="10"  width="40" height="40" fill="#f4c7cb"/>
-      <rect x="60"  y="10"  width="40" height="40" fill="#e8a6b0"/>
-      <rect x="110" y="10"  width="40" height="40" fill="#dccae6"/>
-      <rect x="160" y="10"  width="40" height="40" fill="#cde0ee"/>
-      <rect x="210" y="10"  width="40" height="40" fill="#c9e3d0"/>
-      <rect x="10"  y="60"  width="40" height="40" fill="#f7d9b6"/>
-      <rect x="60"  y="60"  width="40" height="40" fill="#e9d8b6"/>
-      <rect x="110" y="60"  width="40" height="40" fill="#b89bc6"/>
-      <rect x="160" y="60"  width="40" height="40" fill="#c58a95"/>
-      <rect x="210" y="60"  width="40" height="40" fill="#f4c7cb"/>
-      <rect x="10"  y="110" width="40" height="40" fill="#cde0ee"/>
-      <rect x="60"  y="110" width="40" height="40" fill="#c9e3d0"/>
-      <rect x="110" y="110" width="40" height="40" fill="#f7d9b6"/>
-      <rect x="160" y="110" width="40" height="40" fill="#dccae6"/>
-      <rect x="210" y="110" width="40" height="40" fill="#e8a6b0"/>
-      <rect x="10"  y="160" width="40" height="40" fill="#b89bc6"/>
-      <rect x="60"  y="160" width="40" height="40" fill="#f4c7cb"/>
-      <rect x="110" y="160" width="40" height="40" fill="#c9e3d0"/>
-      <rect x="160" y="160" width="40" height="40" fill="#f7d9b6"/>
-      <rect x="210" y="160" width="40" height="40" fill="#cde0ee"/>
-      <rect x="10"  y="210" width="40" height="40" fill="#dccae6"/>
-      <rect x="60"  y="210" width="40" height="40" fill="#c58a95"/>
-      <rect x="110" y="210" width="40" height="40" fill="#e8a6b0"/>
-      <rect x="160" y="210" width="40" height="40" fill="#c9e3d0"/>
-      <rect x="210" y="210" width="40" height="40" fill="#b89bc6"/>
-    </g>
-    <g stroke="rgba(91,58,69,0.55)" stroke-width="3" stroke-linecap="round">
-      <line x1="14"  y1="14"  x2="46"  y2="46"/> <line x1="46"  y1="14"  x2="14"  y2="46"/>
-      <line x1="64"  y1="14"  x2="96"  y2="46"/> <line x1="96"  y1="14"  x2="64"  y2="46"/>
-      <line x1="114" y1="14"  x2="146" y2="46"/> <line x1="146" y1="14"  x2="114" y2="46"/>
-      <line x1="164" y1="14"  x2="196" y2="46"/> <line x1="196" y1="14"  x2="164" y2="46"/>
-      <line x1="214" y1="14"  x2="246" y2="46"/> <line x1="246" y1="14"  x2="214" y2="46"/>
-      <line x1="14"  y1="64"  x2="46"  y2="96"/> <line x1="46"  y1="64"  x2="14"  y2="96"/>
-      <line x1="64"  y1="64"  x2="96"  y2="96"/> <line x1="96"  y1="64"  x2="64"  y2="96"/>
-      <line x1="114" y1="64"  x2="146" y2="96"/> <line x1="146" y1="64"  x2="114" y2="96"/>
-      <line x1="164" y1="64"  x2="196" y2="96"/> <line x1="196" y1="64"  x2="164" y2="96"/>
-      <line x1="214" y1="64"  x2="246" y2="96"/> <line x1="246" y1="64"  x2="214" y2="96"/>
-    </g>
+  <!-- Ivy starter preview -->
+  <g>
+    <rect x="${FX - 8}" y="${FY - 8}" width="${FS + 16}" height="${FS + 16}" rx="${FR + 6}" ry="${FR + 6}" fill="rgba(255,255,255,0.7)"/>
+    <image href="${patternDataUrl}" x="${FX}" y="${FY}" width="${FS}" height="${FS}" preserveAspectRatio="xMidYMid slice" clip-path="url(#frameClip)" image-rendering="pixelated"/>
+    <rect x="${FX}" y="${FY}" width="${FS}" height="${FS}" rx="${FR}" ry="${FR}" fill="none" stroke="rgba(197,138,149,0.45)" stroke-width="2"/>
   </g>
 
   <text x="80" y="595" font-family="'Nunito', 'Segoe UI', system-ui, sans-serif" font-size="22" font-weight="600" fill="#9b6b76" letter-spacing="2">theinsomnolent.github.io/CozyCrossStitch</text>
@@ -222,7 +224,11 @@ async function main() {
     console.log('wrote', out);
   }
 
-  const ogSvg = buildOgSvg(font);
+  const starters = JSON.parse(await readFile(STARTERS_PATH, 'utf8'));
+  const ivy = starters.find((p) => /ivy/i.test(p.name)) ?? starters[0];
+  const patternDataUrl = await renderPatternDataUrl(ivy, 720);
+
+  const ogSvg = buildOgSvg(font, patternDataUrl);
   await writeFile(join(PUBLIC, 'og-image.svg'), ogSvg);
   await sharp(Buffer.from(ogSvg)).resize(1200, 630).png().toFile(join(PUBLIC, 'og-image.png'));
   console.log('wrote og-image.png');
